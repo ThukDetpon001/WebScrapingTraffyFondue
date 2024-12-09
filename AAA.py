@@ -12,6 +12,9 @@ import csv
 import time
 import pandas as pd
 
+import gspread
+from google.oauth2.service_account import Credentials
+
 # Create a dynamic folder name based on current date (Thai Buddhist Era)
 def get_thai_date_folder():
     # Get current date
@@ -228,11 +231,15 @@ def calculate_days_until_today(date_str):
         return None  # คืนค่า None หากเกิดข้อผิดพลาด
 
 # รายชื่อคอลัมน์วันที่ที่ต้องการแปลง
-date_columns = ['date', 'ForwardedDate']
+date_columns = ['ForwardedDate']
+# date_columns = ['date', 'ForwardedDate']
 column_names_mapping = {
-    'date': 'ระยะเวลาจากวันที่เริ่มแจ้ง(วัน)',
     'ForwardedDate': 'ระยะเวลาจากสถานะล่าสุด(วัน)'
 }
+# column_names_mapping = {
+#     'date': 'ระยะเวลาจากวันที่เริ่มแจ้ง(วัน)',
+#     'ForwardedDate': 'ระยะเวลาจากสถานะล่าสุด(วัน)'
+# }
 
 # ตรวจสอบว่าคอลัมน์ที่กำหนดมีอยู่ในข้อมูลหรือไม่
 existing_date_columns = [col for col in date_columns if col in data.columns]
@@ -368,4 +375,36 @@ for agency, agency_df in agency_dfs.items():
 
 print(f"Files have been successfully created in {output_dir}.")
 
+
+# ชื่อไฟล์ JSON ที่ดาวน์โหลดจาก Google Cloud
+SERVICE_ACCOUNT_FILE = 'service_account.json'
+
+# กำหนดสิทธิ์
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+credentials = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+# สร้าง client เพื่อเชื่อมต่อกับ Google Sheets
+gc = gspread.authorize(credentials)
+
+# เปิด Google Sheet โดยใช้ URL หรือ ID ของ Sheet
+SPREADSHEET_URL = 'https://docs.google.com/spreadsheets/d/your_spreadsheet_id/edit'
+sheet = gc.open_by_url(SPREADSHEET_URL)
+
+# ฟังก์ชันสำหรับอัปโหลดข้อมูลไปยัง Google Sheets
+def upload_to_google_sheets(df, sheet_name):
+    try:
+        # เปิด worksheet หรือสร้างใหม่
+        try:
+            worksheet = sheet.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = sheet.add_worksheet(title=sheet_name, rows="100", cols="20")
+        
+        # เคลียร์ข้อมูลเก่า
+        worksheet.clear()
+        
+        # อัปโหลดข้อมูล
+        worksheet.update([df.columns.values.tolist()] + df.values.tolist())
+        print(f"Data successfully uploaded to Google Sheets (Sheet: {sheet_name})")
+    except Exception as e:
+        print(f"Error uploading to Google Sheets: {e}")
 
